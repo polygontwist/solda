@@ -1,4 +1,3 @@
-
 /*
 Arduino 0022 get_SolarData_001
 
@@ -8,7 +7,7 @@ speichern/abruf von Net
 
 LCD auskommentiert aus speichergründen
 
-29.12.2011
+26.01.2012 POST
 */
 
 #include <SdFat.h>
@@ -28,7 +27,7 @@ LCD auskommentiert aus speichergründen
 
 //-----------------------------Ethernet---------------------------
 byte mac[] = { 0xAA, 0xDD, 0xEE, 0xAA, 0x55, 0x01 };
-byte ip[] = { 192, 168,0, 10 };
+byte ip[] = { 192, 168,0, 11 };
 Server server(80);
 
 //-----------------------------SD-Card----------------------------
@@ -45,7 +44,7 @@ SdFile myFile;
 
 char buffer[40];
 
-char memSysinfo00[] PROGMEM = "SolDa V0.9";
+char memSysinfo00[] PROGMEM = "SolDa V0.9b";
 char memSysinfo01[] PROGMEM = ",";
 
 char netstring0[] PROGMEM = "HTTP/1.1 ";
@@ -122,6 +121,9 @@ void dateTime(uint16_t* date, uint16_t* time) {
 //----------------------------------------------------------------
 
 void setup() {
+ // Serial.begin(9600);
+ // Serial.println("GO");
+  
   pinMode(10, OUTPUT); // set the SS pin as an output (necessary!)
   digitalWrite(10, HIGH); // but turn off the W5100 chip!
 
@@ -165,6 +167,10 @@ void loop(){
     */
    delay(50);
     
+   //-------debug----------  
+
+    
+    
   //----------------------------save-----------------------------------------  
     ec=I2C_DS1307.getMinute();
     if(ec!=lastminute){
@@ -192,7 +198,9 @@ void loop(){
       ec=I2C_DS1307.getDate();
       savefilename[4]=(48+ec/10);
       savefilename[5]=(48+ec%10);
-
+      
+      
+      I2C_DS1307.setOutPin(false ,0,false);//LED an 5V anschalten  
       //save
       //I2C_PCF8574.LCDwritestring(0, savefilename);
       if (myFile.open(&root, savefilename, O_RDWR | O_CREAT | O_AT_END)) {//
@@ -212,6 +220,7 @@ void loop(){
         myFile.println(analogRead(A3));        
        }
       myFile.close();
+      I2C_DS1307.setOutPin(true,0,false);//LED an 5V ausschalten  
     }
     
     
@@ -219,14 +228,36 @@ void loop(){
   //----------------------------NET------------------------------------------  
   Client client = server.available();
   if (client) {
+    I2C_DS1307.setOutPin(false ,0,false);//LED an 5V anschalten 
     while (client.connected()) {
       if (client.available()) { 
-        char clientline[BUFSIZ];
-        uint16_t index = 0;       
-        uint8_t c;
-       
         
-        //GET Angefragte Datei ermitteln
+        uint8_t c;//Puffer für eingelesenes Zeichen
+        
+        char clientline[BUFSIZ+1];     //GET/POST zur Ermittlung der angefragten Datei
+        uint16_t index = 0;    
+        
+        char clientlinePOST[BUFSIZ+1]; //Puffer für gesendete Daten (nach GET/POST)
+        uint16_t indexPOST = 0;    
+        
+        char savefilename[BUFSIZ+1];   //Puffer mit Namen der übertragene Datei
+        
+        char boundary[50];           //Puffer für Datentrenner
+        uint16_t boundarycounter = 2;       
+        //char *pboundary; 
+         
+        //verweist auf savefilename!!!
+        char *savedatei;            //Ponter für Dateinamen der zu speichernden Datei
+        
+        
+        //verweist auf clientline!!!
+        char *filename;             //Pointer für angefragte Datei
+        char *optionen;             //Pointer für übergebenen Optionen "?a=5"  ->zum Uhr stellen
+       
+        bool istboundary=false;
+        bool speicherdaten=false;
+       
+        //Angefragte Datei ermitteln steht immer in der ersten Zeile "GET /... HTTP..." oder "POST /... HTTP..."
         c = client.read();        
         while (c!=13){
            clientline[index] = c;//Array of Chars
@@ -235,10 +266,144 @@ void loop(){
            if (index >= BUFSIZ)break;
         }        
         
-        clientline[index] = 0;//null Termination
-        char *filename;
-        char *optionen;
+          
+        //POST or GET
+        if (strstr(clientline, "POST") != 0){ //wenn Post übergebene Daten Parsen...
+          indexPOST=0;
+          
+          clientlinePOST[indexPOST] = c;//in Puffer schreiben
+          indexPOST++;
+          
+          bool sinddaten=false;
+         // uint16_t dateigroesse=0;
+         
+          while (c<255){ //Schleife bis irgendwann c=255 ist
+            
+            
+            if(sinddaten){
+               clientlinePOST[indexPOST] =c;
+               indexPOST++;
+               if(indexPOST>=BUFSIZ || c==13){
+                  clientlinePOST[indexPOST] =0;
+                  
+                  if(speicherdaten){
+                    istboundary=true;
+                    for(uint8_t t=0;t<BUFSIZ-2;t++){
+                      if(clientlinePOST[t+1]!=boundary[t])istboundary=false;
+                     if(!istboundary)break;
+                    }
+                    
+                  if(istboundary) break;
+                  // Serial.print(clientlinePOST);
+                  //  else
+                   
+                 }
+                  
+                  //Content-Type: text/plain
+                  if (strstr(clientlinePOST, "Content-Type:") != 0) {
+                    //ein Enter dann Daten bis Boundary
+                    c = client.read();
+                    delay(1);
+                    c = client.read();
+                    delay(1);
+                    c = client.read();
+                    delay(1);
+                    speicherdaten=true;
+                  }
+                  
+                  indexPOST=0;
+               }
+               //Serial.print(c);
+               /*
+               dateigroesse--;
+               if(dateigroesse==0){
+                Serial.println("-ENDE-");
+                break;
+               }
+              */ 
+            }
+            else{
+             
+            clientlinePOST[indexPOST] = c; //in Puffer schreiben
+            if(c!=34 && c>31)indexPOST++; //Pufferzähler hochzählen, " überlesen
+            
+            if(indexPOST>=BUFSIZ || c==13 || c==59){//Pufferüberlauf oder Enter oder ;
+                clientlinePOST[indexPOST] =0;//null terminieren
+                indexPOST=0;//Counter auf Null
+                
+               //Serial.println(clientlinePOST);
+                
+                if(!istboundary && boundarycounter>2){
+                  //suche " name=Datei; filename=temp.txt"
+                   if (strstr(clientlinePOST, "name=Datei;") != 0) {
+                        c = client.read(); 
+                        delay(1);
+                        indexPOST=0;
+                        while (c!=13){
+                          savefilename[indexPOST] =c;
+                          if(indexPOST<BUFSIZ && c!=34 && c!=32)indexPOST++;
+                          c = client.read();
+                          delay(1);
+                        }
+                        savefilename[indexPOST] =0;
+                        savedatei = savefilename + 8;
+                        sinddaten=true;
+                        indexPOST=0;
+                   }
+                }
+                
+                
+                if(istboundary){
+                   //Serial.println("read boundary");
+                   for(uint8_t t=0;t<BUFSIZ;t++){ 
+                       c=clientlinePOST[t];
+                       boundary[boundarycounter]=c;
+                       if(istboundary)boundarycounter++;
+                       if(c==0 || boundarycounter==49){
+                         boundary[boundarycounter]=0;
+                         boundary[0]=char('-');       //die ersten beiden Zeichen sind immer "--"
+                         boundary[1]=char('-');
+                         istboundary=false;
+                       }
+                     }
+                  /* Serial.print("boundary("); 
+                   Serial.print(String(boundarycounter,DEC)); //41
+                   Serial.print(")="); 
+                   Serial.println(boundary); 
+                   */
+                }
+                //Puffer untersuchen nach "boundary=" ->ist der Trenner zwischen den Datenblöcken
+                if (strstr(clientlinePOST, "boundary=") != 0) {
+                  //Daten aus Puffer in zweiten Puffer übertragen
+                  for(uint8_t t=0;t<BUFSIZ;t++){
+                       c=clientlinePOST[t];
+                       boundary[boundarycounter]=c;
+                       if(istboundary && boundarycounter<50)boundarycounter++;
+                       if(c==61) istboundary=true;//"="
+                     }
+                }
+             
+                //--------------------------------------------------------
+           
+              }
+            
+           
+            }
+            
+            c = client.read(); 
+            delay(1);
+            
+           
+          }
+            
+         // Serial.println("###~ENDE~###");
+             
+          //break; //und raus...
+        }
         
+        //GET ....
+        clientline[index] = 0;//null Termination
+         
         (strstr(clientline, " HTTP"))[0] = 0;// a little trick, look for the " HTTP/1.1" string and
                                              // turn the first character of the substring into a 0 to clear it out.
         
@@ -262,30 +427,39 @@ void loop(){
           if (strstr(optionen, "h") != 0){
             c=chrlisttobyte(wert);
             if(c<24)I2C_DS1307.setHour(c);
+            I2C_DS1307.startClock();
           }
           if (strstr(optionen, "m") != 0){
             c=chrlisttobyte(wert);
             if(c<60)I2C_DS1307.setMinute(c);
+            I2C_DS1307.startClock();
           }
          if (strstr(optionen, "Y") != 0){
             c=chrlisttobyte(wert);
             if(c<100)I2C_DS1307.setYear(c);
+            I2C_DS1307.startClock();
           }
          if (strstr(optionen, "M") != 0){
             c=chrlisttobyte(wert);
             if(c>0 && c<13)I2C_DS1307.setMonth(c);
+            I2C_DS1307.startClock();
           }
           if (strstr(optionen, "T") != 0){
             c=chrlisttobyte(wert);
             if(c>0 && c<32)I2C_DS1307.setDate(c);
+            I2C_DS1307.startClock();
           }
           
-          //"?..." Übergabeparameter ? löschen für Dateiname
+          //"?..." Übergabeparameter löschen für Dateiname
           (strstr(clientline, "?"))[0] = 0; 
         }
-         
-        filename = clientline + 5; // look after the "GET /" (5 chars)
-         
+        
+
+        if (strstr(clientline, "GET") != 0)
+         filename = clientline + 5; // look after the "GET /" (5 chars)
+         else
+         filename = clientline + 6; // look after the "POST /" (6 chars)
+        
         if(filename[0]==0)filename="index.htm"; //keine Datei übergeben: index.htm laden
          
         //-----------Datei öffnen, wenn es fehlschlägt 404 ausgebem------------------
@@ -411,9 +585,23 @@ void loop(){
     }// while (client.connected())
     delay(1);
     client.stop();
+    I2C_DS1307.setOutPin(true ,0,false);//LED an 5V ausschalten 
   }//if (client)   
 }
 
+uint16_t chrlisttoint(char *cahrlist){//übergabe=pointer Zahl sls "String" "0".."255" zu einem int konvertieren
+ uint16_t re=0;
+ uint16_t cc;
+ for(uint16_t t=0;t<BUFSIZ;t++){
+   cc=cahrlist[t];
+   if(cc==0)break;
+   if(cc>47 && cc<58){//0123456789
+     if(t>0)re=re*10;
+     re=re+(cc-48);
+   }
+ }
+ return re;
+}
 uint8_t chrlisttobyte(char *cahrlist){//übergabe=pointer Zahl sls "String" "0".."255" zu einem byte konvertieren
  uint8_t re=0;
  uint8_t cc;
