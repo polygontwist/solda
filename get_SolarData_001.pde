@@ -1,9 +1,12 @@
+
 /*
 Arduino 0022 get_SolarData_001
 
 Strom&Spannung vom Solarpannel(s) 
 speichern auf SD
 speichern/abruf von Net
+
+LCD auskommentiert aus speichergründen
 
 29.12.2011
 */
@@ -59,14 +62,14 @@ char netstring104[] PROGMEM = "image/icon";
 char memstr00[] PROGMEM = "[time]";
 char memstr01[] PROGMEM = "[date]";
 char memstr02[] PROGMEM = "[day]";
-char memstr03[] PROGMEM = "[list]";   //dateiliste
+char memstr03[] PROGMEM = "[list]";   //Dateiliste
 char memstr04[] PROGMEM = "[vers]";   //Progversion
 char memstr05[] PROGMEM = "[temp3]";  //tempsensor 3
 char memstr06[] PROGMEM = "[temp7]";  //tempsensor 7
 char memstr07[] PROGMEM = "[a0]";  //AnalogPort 0
 char memstr08[] PROGMEM = "[a1]";  //AnalogPort 1
 char memstr09[] PROGMEM = "[a2]";  //AnalogPort 2
-char memstr10[] PROGMEM = "[a3]";  //AnalogPort 3 (Port 4+5 wird fÃ¼r I2C benÃ¶tigt)
+char memstr10[] PROGMEM = "[a3]";  //AnalogPort 3 (Port 4+5 wird für I2C benötigt)
 
 
 //_pointers_ zu obrigen Strings
@@ -127,7 +130,7 @@ void setup() {
   root.openRoot(&volume);
   
   Wire.begin();
- // I2C_PCF8574.LCD_init(0);//LCD an Adress 0
+ // I2C_PCF8574.LCD_init(0);//LCD an Adresse 0
   I2C_DS1307.setOutPin(true,0,false);//LED an 5V ausschalten  
 
   SdFile::dateTimeCallback(dateTime);// set date time callback function
@@ -138,11 +141,11 @@ void setup() {
   I2C_PCF8574.LCDwritestring(0, getmyString(strPROGRAMM,0));
   I2C_PCF8574.LCDwritestring(1, String(ip[0],DEC)+'.'+String(ip[1],DEC)+'.'+String(ip[2],DEC)+'.'+String(ip[3],DEC));
  */
- // EEPROM.write(0, 0);//counter fÃ¼r Netzugriffe 0..255
+ // EEPROM.write(0, 0);//counter für Netzugriffe 0..255
 }
 
 
-#define BUFSIZ 40  //zu lesende Zeichenkette max Zeichen (fÃ¼r GET und [tag]-Auswertung)
+#define BUFSIZ 40  //zu lesende Zeichenkette max Zeichen (für GET und [tag]-Auswertung)
 
 uint8_t lastminute=0;
 uint8_t lastminuteCounter=0;
@@ -239,22 +242,22 @@ void loop(){
         (strstr(clientline, " HTTP"))[0] = 0;// a little trick, look for the " HTTP/1.1" string and
                                              // turn the first character of the substring into a 0 to clear it out.
         
-        //------------Ãœbergabeparameter----------------
+        //------------Übergabeparameter----------------
         if (strstr(clientline, "?") != 0){ // [GET /dateinam.htm?value=12345]
          
           if (strstr(clientline, "&") != 0)
-            (strstr(clientline, "&"))[0] = 0; //nur einen Ã¼bergabepameter!
+            (strstr(clientline, "&"))[0] = 0; //nur einen übergabepameter!
           
           optionen=strstr(clientline, "?");//Pointer
           optionen=optionen+1;//Pointer  "var=12345"
           
-          //Optionen zum z.B. Uhrenstellen
+          //Optionen zum z.B. Uhr einstellen
           //
           char *wert;
           wert=strstr(clientline, "=");
           wert=wert+1;
           
-          (strstr(clientline, "="))[0] = 0;// "=" mit null ersten
+          (strstr(clientline, "="))[0] = 0;// "=" mit null ersetzen
           
           if (strstr(optionen, "h") != 0){
             c=chrlisttobyte(wert);
@@ -277,15 +280,15 @@ void loop(){
             if(c>0 && c<32)I2C_DS1307.setDate(c);
           }
           
-          //"?..." Ãœbergabeparameter weg fÃ¼r Dateiname
+          //"?..." Übergabeparameter ? löschen für Dateiname
           (strstr(clientline, "?"))[0] = 0; 
         }
          
         filename = clientline + 5; // look after the "GET /" (5 chars)
          
-        if(filename[0]==0)filename="index.htm"; //keine Datei Ã¼bergeben: index.htm laden
+        if(filename[0]==0)filename="index.htm"; //keine Datei übergeben: index.htm laden
          
-        //-----------Datei Ã¶ffnen, wenn es fehlschlÃ¤gt 505 ausgebem------------------
+        //-----------Datei öffnen, wenn es fehlschlägt 404 ausgebem------------------
         if (! file.open(&root, filename, O_READ)) {
             client.print  (getmyString(strNETStatus,0));     //"HTTP/1.1 "
             client.println(getmyString(strNETStatus,1));     //"404 Not Found"
@@ -337,10 +340,10 @@ void loop(){
                    
                    if(tagopen){
                       clientline[index] = c2;     //gelesenes Byte in Puffer schreiben
-                      index++;                    //Puffercounter hochzÃ¤hlen  
-                      if(index>=BUFSIZ){          //PufferÃ¼berlauf
+                      index++;                    //Puffercounter hochzählen  
+                      if(index>=BUFSIZ){          //Pufferüberlauf
                         index--;
-                        clientline[index] = 0;    //letzten Wert lÃ¶schen und 0 reinschreiben (0-terminierter String)
+                        clientline[index] = 0;    //letzten Wert löschen und 0 reinschreiben (0-terminierter String)
                         client.print((String)clientline);//Puffer ausgeben
                         client.print((char)c2);   //letztes Zeichen ausgeben
                         index=0;
@@ -399,10 +402,10 @@ void loop(){
               else
                client.print(char(c2));//text,bin                
                  
-             c2 = file.read();//nÃ¤chstes Zeichen
+             c2 = file.read();//nächstes Zeichen
         }
                 
-        file.close();                           //Datzei schlieÃŸen
+        file.close();                           //Datei schließen
         break;                                  //while verlassen        
       }//if (client.available())
     }// while (client.connected())
@@ -411,7 +414,7 @@ void loop(){
   }//if (client)   
 }
 
-uint8_t chrlisttobyte(char *cahrlist){//Ã¼bergabe=pointer Zahl sls "String" "0".."255" zu einem byte konvertieren
+uint8_t chrlisttobyte(char *cahrlist){//übergabe=pointer Zahl sls "String" "0".."255" zu einem byte konvertieren
  uint8_t re=0;
  uint8_t cc;
  for(uint8_t t=0;t<BUFSIZ;t++){
@@ -444,7 +447,7 @@ void ListFiles(Client client) {
     // print any indent spaces
     client << F("<li>");
     
-    // DateiÃ¤nderungsdatum & -zeit 
+    // Dateiänderungsdatum & -zeit 
    //if (flags & LS_DATE) {
        uint16_t data=p.lastWriteDate; //gepackte Datenstrucktur
        client << F(" ");     
@@ -469,7 +472,7 @@ void ListFiles(Client client) {
     //Datei verlinken 
     client << F(" <a href=\"");    
     for (uint8_t i = 0; i < 11; i++) {  //8.3
-      if (p.name[i] == ' ') continue;   //leerzeichen Ã¼berlesen
+      if (p.name[i] == ' ') continue;   //leerzeichen überlesen
       if (i == 8)   client << F(".");  //nach 8 zeichen kommt die Endung
       client.print(p.name[i]);
     }    
